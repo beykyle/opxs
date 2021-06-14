@@ -1,10 +1,7 @@
 #! /usr/bin/python3
 
 import numpy as np
-from matplotlib import pyplot as plt
-import matplotlib
-import matplotlib.pyplot as mpl
-mpl.rcParams['font.size'] = 16
+import matplotlib.pyplot as plt
 
 """
 This module numerically solves the radial Schroedinger's Equation in an arbitrary central potential using a finite differencing scheme
@@ -54,13 +51,9 @@ def AlphaTest():
     plt.ylabel(r"$V(r)$ [eV]")
     plt.tight_layout()
     plt.show()
-    # find the bound state
     l = 1 # angular momentum quantum number
-    #converged = False
-    u         = np.zeros(grid_sz)
-    E         = -76.9036145E6
-    #while(not converged):
-    #E = guessNewEnergy(E,u)
+    u    = np.zeros(grid_sz)
+    E    = -76.9036145E6
     u    = solve(l,0,mph2,V,r)
     print("Found bound state! Energy: {:1.6e} eV".format(E))
     plt.plot(r, u, label=r"$\psi_{}(r)$".format(l))
