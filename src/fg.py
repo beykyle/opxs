@@ -3,7 +3,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import special as sc
-from nuclide import Nuclide, reducedh2m
+from nuclide import Nuclide, reducedh2m_fm2
 
 """
 This module numerically solves the radial Schroedinger's Equation in an arbitrary central potential using a finite differencing scheme
@@ -31,7 +31,7 @@ def solve(l : int, E : float, h2m : float, V : np.array, r : np.array, u : np.ar
     k = h**2/12
     for i in range(1,grid_size-1):
         u[i+1] = (2*u[i] - u[i-1] - k * (10 * w[i] * u[i] + w[i-1] * u[i-1])) /\
-                   (1 + k * w[i+1] )
+                 (1 + k * w[i+1] )
 
     return norm(u)
 
@@ -52,7 +52,7 @@ def AlphaTest():
     r       = np.linspace(0,Rmax,grid_sz)
     proj    = Nuclide(4,2)
     targ    = Nuclide(4,2)
-    h2m     = reducedh2m(proj, targ)
+    h2m     = reducedh2m_fm2(proj, targ)
     h2m     = 10.375E6
     V0      = 122.694E6 # eV
     beta    = 0.22 #fm
@@ -84,7 +84,7 @@ def BesselTest():
     r       = np.linspace(0,Rmax*2,grid_sz)
     proj    = Nuclide(4,2)
     targ    = Nuclide(4,2)
-    h2m     = reducedh2m(proj, targ)
+    h2m     = reducedh2m_fm2(proj, targ)
     V0      = 1E10 # potential well w/ depth 1E9 eV
     V       = np.zeros(grid_sz)
     V[grid_sz//2:] = V0
@@ -107,7 +107,6 @@ def BesselTest():
             i += 1
             E =  h2m * k**2
             u = solve(l,E,h2m,V,r,u)
-            print(u)
             u_anal = norm(sc.spherical_jn(l,k*r))
             plt.scatter(r[:grid_sz//2], u[:grid_sz//2],
                     label=r"$| {}{} \rangle$: Fox-Goodwin".format(n+1,l),
