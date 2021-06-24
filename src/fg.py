@@ -12,6 +12,18 @@ TODO:
     - extend to complex potentials
     - test with Koning-Delaroche optical model potentials
 """
+def plot(u,r,l,title):
+    plt.plot(r, u, label=r"$l = {}$".format(l))
+    plt.xlabel("$r$ [fm]")
+    plt.ylabel("$\psi(r)$")
+    plt.title(title)
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+def runTestAndPlot(l,E,h2m,V,r,u,title):
+    u = solve(l,E,h2m,V,r,u)
+    plot(u,r,l, title + ": E={:1.2e} [eV]".format(E))
 
 def norm(psi):
     return psi/np.linalg.norm(psi)
@@ -33,7 +45,8 @@ def solve(l : int, E : float, h2m : float, V : np.array, r : np.array, u : np.ar
         u[i+1] = (2*u[i] - u[i-1] - k * (10 * w[i] * u[i] + w[i-1] * u[i-1])) /\
                  (1 + k * w[i+1] )
 
-    return norm(u)
+    return u
+    #return norm(u)
 
 def plotPotential(r,V):
     # plot potential
@@ -52,7 +65,6 @@ def AlphaTest():
     r       = np.linspace(0,Rmax,grid_sz)
     proj    = Nuclide(4,2)
     targ    = Nuclide(4,2)
-    h2m     = reducedh2m_fm2(proj, targ)
     h2m     = 10.375E6
     V0      = 122.694E6 # eV
     beta    = 0.22 #fm
@@ -60,22 +72,31 @@ def AlphaTest():
 
     # set up wavefuncton
     u = np.zeros(grid_sz)
-    u[0] = 0 # repulsive
+    u[0] = 0
     u[1] = 1
 
+    #TPOPC 13.7
+    runTestAndPlot(0,-76.9036145E6,h2m,V,r,u,"13.7")
 
-    # solve for multiple angular momenta
-    for l in range(0,1):
-        E = -76.9036145E6
-        u = solve(l,E,h2m,V,r,u)
-        plt.plot(r, u, label=r"$\psi_{}(r)$".format(l))
+    #13.8
+    runTestAndPlot(0,-29.00048E6,h2m,V,r,u,"13.8")
 
-    # plot resulting wavefunction
-    #plt.plot(r, u*u/np.max(u), label=r"$|\psi_{}(r)|^2$".format(l))
-    plt.xlabel("$r$ [fm]")
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
+    r = np.linspace(0,18,grid_sz)
+    V = VAlpha(r)
+
+    # 13.10
+    E = 1E6
+    l = 0
+    runTestAndPlot(0,1E6,h2m,V,r,u,"13.10")
+
+    # 13.11
+    runTestAndPlot(0,20E6,h2m,V,r,u,"13.11")
+
+    # 13.12
+    runTestAndPlot(4,5E6,h2m,V,r,u,"13.12")
+
+    # 13.13
+    runTestAndPlot(10,10E6,h2m,V,r,u,"13.13")
 
 def BesselTest():
     # this test doesn't work
@@ -125,5 +146,5 @@ def BesselTest():
 if __name__ == "__main__":
     print("Running alpha-alpha reaction example from TPOTPC, ch. 13")
     AlphaTest()
-    print("Bessel test")
-    BesselTest()
+    #print("Bessel test")
+    #BesselTest()
