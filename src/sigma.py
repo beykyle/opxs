@@ -146,10 +146,10 @@ def test_dSigdmu(E):
 def test_SigE():
     A     = 56
     Z     = 26
-    lmax  = 16
+    lmax  = 58
 
-    Egrid_sz = 5000
-    Egrid    = np.logspace(-3,3,Egrid_sz)
+    Egrid_sz = 500
+    Egrid    = np.logspace(1,2.5,Egrid_sz)
 
     target    = Nuclide(A,Z)
     neutron   = Projectile(1.008665)
@@ -182,7 +182,8 @@ def test_SigE():
 
 if __name__ == "__main__":
     # reproduce figs form TPOPC ch.19
-    #test_dSigdmu(2.776) # 19.10
-    #test_dSigdmu(10)    # 19.8
-    #test_dSigdmu(50)    # 19.9
+    test_dSigdmu(2.776) # 19.10
+    test_dSigdmu(10)    # 19.8
+    test_dSigdmu(50)    # 19.9
+    test_dSigdmu(1.7091E2)    # weird dip in xs(E)
     test_SigE()
