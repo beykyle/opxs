@@ -33,7 +33,8 @@ def plotDiffXSDeg(dSigdMu,mu, label):
 
 """
 Calculates a non-relativistic differential scattering cross section [fm^2] for a
-neutral projectile incident on a spherically-symmetric Woods-Saxon optical potential
+neutral projectile incident on a spherically-symmetric Woods-Saxon optical potential.
+Also calculates the total xs 3-ways for debugging.
 @param E_inc  incident projectile energy in COM frame [MeV]
 @param mu     grid of cos(theta) in the COM frame over which to determine xs (on [-1,1]).
 @param w      quadrature weights for the grid over mu
@@ -62,32 +63,37 @@ def neutralProjXS(target : Nuclide, proj : Projectile, pot,
     u = np.zeros(grid_size)
     u[1] = 1
 
-    # grid over Legendre moments
-    delta  = np.zeros(lmax+1)
+    # grids over Legendre moments
     l_grid = np.arange(0,lmax+1,1)
+    delta  = np.zeros(lmax+1) # scattering phase shift
 
     # for each angular momentum eigenstate
     sig_s = 0 # tally up contributions from each eigenstate
     for l in l_grid:
         # solve Schroedinger's equation in the internal region
         u = solve(l, E_inc, h2m, V, r, u)
-        # stitch together internal wvfxn with external analytic solution
+
+        # stitch together internal numeric wvfxn with external analytic solution
         A1 = (Rmax - dr) * sc.spherical_jn(l, k * (Rmax - dr)) * u[-1] \
            - Rmax * sc.spherical_jn(l, k * Rmax) * u[-2]
         A2 = (Rmax - dr) * sc.spherical_yn(l, k * (Rmax - dr)) * u[-1] \
            - Rmax * sc.spherical_yn(l, k * Rmax) * u[-2]
+
         # calculate phase shift
         delta[l]  = np.arctan2(A1,A2)
-        sig_s += (2*l +1) * np.sin(delta[l])**2
+
+        # tally total xs contribution
+        sig_s    += (2*l +1) * np.sin(delta[l])**2
 
 
     # partial wave expansion gives us the matrix element S(mu) as a Legendre series
+    # take Re and Im parts of series sum
     Refmu = 1/(2*k) * np.polynomial.legendre.legval(mu, (2 * l_grid + 1)*np.sin(2 * delta) )
     Imfmu = 1/(k)   * np.polynomial.legendre.legval(mu, (2 * l_grid + 1)*np.sin(delta)**2  )
 
-    # dSigma/dmu = complex square of matrix element
-    # factor fo 2pi comes fro integrating over azimuth (symmetric)
-    Smu       = 2*np.pi*( Refmu**2 + Imfmu**2)
+    # Diff xs is complex square of matrix element: dSigma/dOmega = 2pi Smu
+    # factor of 2pi comes from integrating over azimuth (symmetric)
+    Smu = 2*np.pi*( Refmu**2 + Imfmu**2)
 
     # total xs (Gauss-Legendre integration over Smu)
     sig_s_GL  = np.dot(Smu,w)
