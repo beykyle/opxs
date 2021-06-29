@@ -155,7 +155,7 @@ def test_SigE():
     lmax  = 58
 
     Egrid_sz = 500
-    Egrid    = np.logspace(1,2.5,Egrid_sz)
+    Egrid    = np.logspace(-1,2,Egrid_sz)
 
     target    = Nuclide(A,Z)
     neutron   = Projectile(1.008665)
