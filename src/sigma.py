@@ -4,7 +4,7 @@ import numpy as np
 import sys
 import matplotlib.pyplot as plt
 from scipy import special as sc
-from nuclide import Nuclide, Projectile, reducedh2m_fm2
+from nuclide import Nuclide, Projectile, Nuetron, reducedh2m_fm2
 from fg import solve
 import optical
 
@@ -43,7 +43,7 @@ Also calculates the total xs 3-ways for debugging.
               value in MeV.
 """
 def neutralProjXS(target : Nuclide, proj : Projectile, pot,
-        E_inc : float, mu : np.array, w : np.array,
+                  E_inc : float, mu : np.array, w : np.array,
                   grid_size = 1000 , lmax = 30):
 
     # neutral particles only
@@ -118,7 +118,7 @@ def test_dSigdmu(E):
     lmax  = 30
 
     target    = Nuclide(A,Z)
-    neutron   = Projectile(1.008665)
+    neutron   = Neutron()
     potential = optical.simpleWoodSaxon(56.3, 0.32, 24.0, target)
     mu, w     = np.polynomial.legendre.leggauss(500)
     #potential.plot(E_inc, np.linspace(0,3*target.R,500))
@@ -158,7 +158,7 @@ def test_SigE():
     Egrid    = np.logspace(-1,2,Egrid_sz)
 
     target    = Nuclide(A,Z)
-    neutron   = Projectile(1.008665)
+    neutron   = Nuetron()
     potential = optical.simpleWoodSaxon(56.3, 0.32, 24.0, target)
     mu, w     = np.polynomial.legendre.leggauss(200)
 
