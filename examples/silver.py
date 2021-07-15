@@ -16,7 +16,7 @@ def runCalc(potential, target):
     Egrid_sz = 1000
     Egrid    = np.logspace(-3,2,Egrid_sz)
 
-    neutron   = Projectile(1.008665)
+    neutron   = Neutron()
     mu, w     = np.polynomial.legendre.leggauss(200)
 
     sig_ss_E  = np.zeros(Egrid_sz)
