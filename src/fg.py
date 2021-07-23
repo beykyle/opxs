@@ -8,9 +8,6 @@ from nuclide import Nuclide, reducedh2m_fm2
 """
 This module numerically solves the radial Schroedinger's Equation in an arbitrary central potential using a finite differencing scheme
 
-TODO:
-    - extend to complex potentials
-    - test with Koning-Delaroche optical model potentials
 """
 def plot(u,r,l,title):
     plt.plot(r, u, label=r"$l = {}$".format(l))
@@ -36,8 +33,8 @@ def solve(l : int, E : float, h2m : float, V : np.array, r : np.array, u : np.ar
     h = deltar[0]
 
     # set up potentials
-    w      = (E - V) / h2m  - l * (l + 1) / r**2
-    w[0] = 0 # todo numerical trick
+    w    = (E - V) / h2m  - l * (l + 1) / r**2
+    w[0] = np.complex(0,0)
 
     # finite difference: fox-goodwin scheme o(deltar^4)
     k = h**2/12
