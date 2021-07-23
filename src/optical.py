@@ -8,8 +8,12 @@ from nuclide import Nuclide, Projectile, Neutron, e, hbar,c, reducedMass_eV
 This module provides simple optical potentials
 """
 
+class DepthModel:
+    def V0(self,E:float):
+        return 0
+
 """ from (Schmid, 1988, ch. 19) """
-class TPAPCDepthModel:
+class TPAPCDepthModel(DepthModel):
     def __init__(self, V1 : float, V2 : float, V3: float, nuc : Nuclide):
         self.coeffs = np.array([V1, V2, V3])
         self.nuc = nuc
@@ -19,7 +23,7 @@ class TPAPCDepthModel:
                   - (1 - 2 * self.nuc.Z / self.nuc.A) * self.coeffs[2]
 
 """ from (A.j. Koning, J.P. Delaroche, 2003) """
-class KDVolumeDepth:
+class KDVolumeDepth(DepthModel):
     def __init__(self, coeffs, fermi_energy):
         assert(coeffs.size == 4)
         self.v1 = coeffs[0]
@@ -34,7 +38,7 @@ class KDVolumeDepth:
                 (1 - self.v2 *theta + self.v3 * theta**2 - self.v4 * theta**3)
 
 """ from (A.j. Koning, J.P. Delaroche, 2003) """
-class KDComplexVolumeDepth:
+class KDComplexVolumeDepth(DepthModel):
     def __init__(self, coeffs, fermi_energy):
         assert(coeffs.size == 2)
         self.w1 = coeffs[0]
@@ -46,7 +50,7 @@ class KDComplexVolumeDepth:
         return self.w1 * theta**2/(theta**2 + self.w2**2)
 
 """ from (A.j. Koning, J.P. Delaroche, 2003) """
-class KDComplexSurfaceDepth:
+class KDComplexSurfaceDepth(DepthModel):
     def __init__(self, coeffs, fermi_energy):
         assert(coeffs.size == 3)
         self.d1 = coeffs[0]
@@ -60,7 +64,7 @@ class KDComplexSurfaceDepth:
                 * np.exp(-self.d2*theta)
 
 """ from (A.j. Koning, J.P. Delaroche, 2003) """
-class KDSpinOrbitDepth:
+class KDSpinOrbitDepth(DepthModel):
     def __init__(self, coeffs, fermi_energy):
         assert(coeffs.size == 2)
         self.vso1 = coeffs[0]
@@ -72,14 +76,14 @@ class KDSpinOrbitDepth:
         return self.vso1 * np.exp(-self.vso2*theta)
 
 """ from (A.j. Koning, J.P. Delaroche, 2003) """
-class KDComplexSpinOrbitDepth:
+class KDComplexSpinOrbitDepth(DepthModel):
     def __init__(self, coeffs, fermi_energy):
         assert(coeffs.size == 2)
         self.wso1 = coeffs[0]
         self.wso2 = coeffs[1]
         self.Ef = fermi_energy
 
-    def w0(self, E : float):
+    def V0(self, E : float):
         theta = E - self.Ef
         return self.wso1 * theta**2 / (theta**2 + self.wso2**2)
 
@@ -114,7 +118,8 @@ class CoulombPotential:
         self.R      = R
 
     def V(self, E : float, r : np.array):
-        return np.where((r < self.R),
+        return np.where(
+                (r < self.R),
                 self.target.Z * self.proj.Z * e**2  / (2*self.R) * (3 - r**2/self.R**2),
                 self.target.Z * self.proj.Z * e**2/r )
 
@@ -153,7 +158,7 @@ class SpinState:
         self.parity = (l%2==0)
 
     def IdotSigma(self):
-        return (j*(j+1) - l*(l+1) - s*(s+1))/2
+        return (self.j*(self.j+1) - self.l*(self.l+1) - self.s*(self.s+1))/2
 
 class OMP:
     def __init__(self, target : Nuclide, proj : Projectile, p : OMPParams):
@@ -166,7 +171,7 @@ class OMP:
         self.cmpl_vol_depth  = KDComplexVolumeDepth(p.cmpl_vol.coeffs, p.Ef)
         self.cmpl_surf_depth = KDComplexSurfaceDepth(p.cmpl_surf.coeffs, p.Ef)
         self.real_so_depth   = KDSpinOrbitDepth(p.real_so.coeffs, p.Ef)
-        self.cmpl_so_depth   = KDSpinOrbitDepth(p.cmpl_so.coeffs, p.Ef)
+        self.cmpl_so_depth   = KDComplexSpinOrbitDepth(p.cmpl_so.coeffs, p.Ef)
 
         # set up functional forms
         self.real_vol  = WoodSaxon(p.real_vol.R,  p.real_vol.a,  self.real_vol_depth)
@@ -178,17 +183,23 @@ class OMP:
         self.so_factor = (hbar * c / reducedMass_eV(proj,target))**2 # fm^2
 
     def real(self,E,r, ket : SpinState):
+        spin_cpl = ket.IdotSigma() * self.so_factor * self.real_so.dVdr(E,r) / r
+        spin_cpl[0] = 0
         return  - self.real_vol.V(E,r) \
-                + ket.IdotSigma() * self.so_factor * self.real_so.dVdr(E,r) / r \
+                + spin_cpl \
                 + self.coulomb.V(E,r)
 
     def imag(self,E,r, ket : SpinState):
+        spin_cpl = ket.IdotSigma() * self.so_factor * self.cmpl_so.V(E,r)
+        spin_cpl[0] = 0
+        cmpl_surf = self.cmpl_surf.dVdr(E,r) / r
+        cmpl_surf[0] = 0
         return  - self.cmpl_vol.V(E,r) \
-                + ket.IdotSigma() * self.so_factor * self.cmpl_so.V(E,r) \
-                - self.cmpl_surf.dVdr(E,r) / r
+                + spin_cpl \
+                - cmpl_surf
 
     def V(self,E,r, ket : SpinState):
-        return real(E,r,ket) + np.complex(0,1) * imag(E,r,ket)
+        return self.real(E,r,ket) + np.complex(0,1) * self.imag(E,r,ket)
 
     def plot(self,V,E,r,label):
         plt.plot(r, V, label=label)
@@ -204,6 +215,18 @@ class OMP:
         plt.plot(r, self.cmpl_surf.dVdr(E,r) / r, label=r"$W_{D}$")
         plt.xlabel(r"$r$ [fm]")
         plt.ylabel(r"$V(r)$ [MeV]")
+        plt.tight_layout()
+        plt.legend()
+        plt.show()
+
+    def plotDepths(self,E : np.array):
+        plt.plot(E, self.real_vol_depth.V0(E),  label=r"$V_v$")
+        plt.plot(E, self.real_so_depth.V0(E),   label=r"$V_{so}$")
+        plt.plot(E, self.cmpl_vol_depth.V0(E),  label=r"$W_v$")
+        plt.plot(E, self.cmpl_so_depth.V0(E),   label=r"$W_{so}$")
+        plt.plot(E, self.cmpl_surf_depth.V0(E), label=r"$W_{D}$")
+        plt.xlabel(r"$E_{CM}$ [MeV]")
+        plt.ylabel(r"Potential Depth $V_0$ [MeV]")
         plt.tight_layout()
         plt.legend()
         plt.show()
