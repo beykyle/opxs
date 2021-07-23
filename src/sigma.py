@@ -4,9 +4,10 @@ import numpy as np
 import sys
 import matplotlib.pyplot as plt
 from scipy import special as sc
-from nuclide import Nuclide, Projectile, Nuetron, reducedh2m_fm2
+from nuclide import *
 from fg import solve
 import optical
+from fractions import Fraction
 
 #debug
 import pdb
@@ -33,8 +34,8 @@ def plotDiffXSDeg(dSigdMu,mu, label):
 
 """
 Calculates a non-relativistic differential scattering cross section [fm^2] for a
-neutral projectile incident on a spherically-symmetric Woods-Saxon optical potential.
-Also calculates the total xs 3-ways for debugging.
+neutral projectile incident on a spherically-symmetric potential.
+Also calculates the total xs 3 ways for debugging.
 @param E_inc  incident projectile energy in COM frame [MeV]
 @param mu     grid of cos(theta) in the COM frame over which to determine xs (on [-1,1]).
 @param w      quadrature weights for the grid over mu
@@ -108,6 +109,85 @@ def neutralProjXS(target : Nuclide, proj : Projectile, pot,
 
     return Smu, sig_s_GL, sig_s_SS, sig_s_opt
 
+"""
+Calculates a non-relativistic differential scattering cross section [fm^2] for an
+arbitrary projectile incident on a spherically-symmetric potential.
+@param pot    An Optical Model Potenrtial (OMP), with function V(r,E,ket) returning a complex
+              np array for the potiential at incident energy E [MeV], over distance np array r [fm],
+              and with SpinState ket
+@param E_inc  incident projectile energy in COM frame [MeV]
+@param mu     grid of cos(theta) in the COM frame over which to determine xs (on [-1,1]).
+@param w      quadrature weights for the grid over mu
+@param pot    potential function for target-projectile pair, as a function of the distance
+              between them. Object should be callable with a distance in fm. Should return a
+              value in MeV.
+"""
+def xs(target : Nuclide, proj : Projectile, pot,
+       E_inc : float, mu : np.array, w : np.array,
+       grid_size = 1000 , lmax = 30):
+
+    # neutral particles only
+    assert(proj.Z == 0)
+
+    # parameters and dimensional analysis
+    h2m = reducedh2m_fm2(proj, target)/1E6 # MeV fm^2
+    k   = np.sqrt(E_inc/h2m) # 1/fm
+
+    # set up radial and potential grids for the internal region
+    Rmax = 3*target.R
+    r  = np.linspace(0,Rmax,grid_size)
+    dr = r[-1] - r[-2]
+
+    # spin of projectile
+    s,_  = proj.Jpi
+
+    # grids over Legendre moments
+    l_grid = np.arange(0,lmax+1,1)
+    Al     = np.zeros(lmax+1) # reduced S-matrix element Sl
+
+    # for each angular momentum eigenstate
+    sig_s = 0 # tally up contributions from each eigenstate
+    for l in l_grid:
+        # determine allowed total projectile angular momentum j
+        # (eigenvalues of vector addition of l and s)
+        lower = -s
+        if (s>l):
+            lower = s
+        sgrid = np.arange(lower,s+1,1)
+        jgrid = sgrid + l
+        for j in jgrid:
+            ket = optical.SpinState(j,l,s)
+            V = pot.V(E_inc,r,ket)
+            u     = np.zeros(V.shape,dtype="cdouble")
+            u[1]  = np.complex(1,1)
+            # solve Schroedinger's equation in the internal region
+            u = solve(l, E_inc, h2m, V, r, u)
+            plotPsi(u,r,l,j)
+
+            # match real and imag components to external wvfxn
+
+
+            # calculate reduced matrix element S_l^j
+
+def plotPsi(u,r,l,j):
+    plt.title(r"$|l,j\rangle = |{},{}\rangle$".format(l,Fraction(j)))
+    rho = (u.real**2 + u.imag**2)
+    plt.plot(r,u.real/np.sum(u.real),label=r"Re[$\psi$]")
+    plt.plot(r,u.imag/np.sum(u.imag),label=r"Im[$\psi$]")
+    plt.plot(r,rho/np.sum(rho),label=r"$\|\psi\|^2$")
+    plt.xlabel(r"$r$ [fm]")
+    plt.ylabel(r"$\psi(r)$ [un-normalized]")
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+def plotPot(r,realV,imagV):
+    plt.plot(r,realV, label=r"Re($V(r)$)")
+    plt.plot(r,imagV, label="Im($V(r)$)")
+    plt.xlabel(r"$r$ [fm]")
+    plt.ylabel(r"$V(r)$ [MeV]")
+    plt.legend()
+    plt.show()
 
 def test_dSigdmu(E):
 
@@ -186,10 +266,22 @@ def test_SigE():
     plt.tight_layout()
     plt.show()
 
-if __name__ == "__main__":
+def realPotTests():
     # reproduce figs form TPOPC ch.19
     test_dSigdmu(2.776) # 19.10
     test_dSigdmu(10)    # 19.8
     test_dSigdmu(50)    # 19.9
     test_dSigdmu(1.7091E2)    # weird dip in xs(E)
     test_SigE()
+
+def cmplPotTests():
+    Fe56   = Nuclide(56,26)
+    n      = Neutron()
+    params = optical.OMPParams(Fe56,n)
+    omp    = optical.OMP(Fe56, n, params)
+    mu, w  = np.polynomial.legendre.leggauss(80)
+    xs(Fe56,n,omp,50,mu,w,lmax=3)
+
+if __name__ == "__main__":
+    #realPotTests()
+    cmplPotTests()
