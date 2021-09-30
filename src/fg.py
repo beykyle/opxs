@@ -25,6 +25,11 @@ def runTestAndPlot(l,E,h2m,V,r,u,title):
 def norm(psi):
     return psi/np.linalg.norm(psi)
 
+"""
+Uses the Fox-Goodwin method (TPOTPC Ch. 13) to solve for the radial component of a stationary
+angular momentum state of the radial Schroedinger equation. Note the returned array is
+u_l(r), where the full radial wavefunction is sum_l u_l(r)/r
+"""
 def solve(l : int, E : float, h2m : float, V : np.array, r : np.array, u : np.array):
     grid_size = V.size
     assert(r.size == grid_size)
@@ -55,6 +60,21 @@ def plotPotential(r,V):
 
 def VAlpha(r , V0=122.694E6, beta=0.22):
     return -V0 * np.exp(-beta * r * r)
+
+def HOTest():
+    grid_sz = 10000
+    Rmax    = 1000.00 # fm
+    r       = np.linspace(0,Rmax,grid_sz)
+    h2m     = 1
+    V       = r**2 + 1j*np.zeros(grid_sz)
+
+    # set up wavefuncton
+    u = np.zeros(grid_sz)
+    u[0] = 0
+    u[1] = 1
+
+    #TPOPC 13.7
+    runTestAndPlot(0,100,h2m,V,r,u,"Harmonic Oscillator")
 
 def AlphaTest():
     grid_sz = 10000
@@ -141,7 +161,8 @@ def BesselTest():
     plt.show()
 
 if __name__ == "__main__":
-    print("Running alpha-alpha reaction example from TPOTPC, ch. 13")
-    AlphaTest()
+    #print("Running alpha-alpha reaction example from TPOTPC, ch. 13")
+    #AlphaTest()
     #print("Bessel test")
     #BesselTest()
+    HOTest()
