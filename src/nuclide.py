@@ -64,7 +64,7 @@ class Nuclide(Projectile):
 
     """ mass in amu """
     def mass(self):
-        return Proton().m * self.Z + Neutron().m * self.A - self.binding() * 1E6 / amu2eV
+        return Proton().m * self.Z + Neutron().m * (self.A-self.Z) - self.binding() * 1E6 / amu2eV
 
     def compound(self, proj : Projectile):
         return Nuclide(self.A + proj.A, self.Z + proj.Z)
