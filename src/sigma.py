@@ -17,26 +17,22 @@ import pdb
 This module calculates cross sections for neutral particles incident on spherically symmmetric potentials
 """
 
-""" assumes mu in [-1,1] """
-def getSrPerBin(mu):
-    sr_per_bin = np.zeros(mu.shape)
-    sr_per_bin[0]  = 2*np.pi*(mu[0] +1)
-    sr_per_bin[1:] = 2*np.pi*(mu[1:] - mu[:-1])
-    return sr_per_bin
+fm2_to_mb = 10
+
 
 def plotDiffXS(dSigdMu,mu, label):
-    plt.semilogy(mu, dSigdMu/getSrPerBin(mu), label=label)
+    plt.semilogy(mu, dSigdMu, label=label)
     plt.xlabel(r"$\cos{\left( \theta \right)}$")
     plt.ylabel(r"$\frac{d\sigma}{d\mu}$ [mb/sr]")
     plt.legend()
-    plt.gca().invert_xaxis()
+    plt.gca().invert_xaxis() # mu=t to -1, e.g. forward scattering first
 
-def plotDiffXSDeg(dSigdMu,mu, label):
-    sr_per_bin = getSrPerBin(mu)
-    jacobian   = np.sin(np.arccos(mu))
-    plt.semilogy(np.arccos(mu)*180/(np.pi),dSigdMu*jacobian/sr_per_bin, label=label)
+def plotDiffXSDeg(dSigdMu,mu,w,label):
+    theta      = np.arccos(mu) # radians
+    jacobian   = 1
+    plt.semilogy(theta*180/(np.pi),dSigdMu*jacobian, label=label)
     plt.xlabel(r"$\theta^\degree$")
-    plt.ylabel(r"$\frac{d\sigma}{d\mu}$ [mb/sr]")
+    plt.ylabel(r"$\frac{d\sigma}{d\Omega}$ [mb/sr]")
     plt.legend()
 
 """
@@ -52,7 +48,7 @@ Also calculates the total xs 3 ways for debugging.
 """
 def neutralProjRealPotXS(target : Nuclide, proj : Projectile, pot,
                   E_inc : float, mu : np.array, w : np.array,
-                  grid_size = 1000 , lmax = 30):
+                  grid_size = 10000 , lmax = 30):
 
     # neutral particles only
     assert(proj.Z == 0)
@@ -107,14 +103,14 @@ def neutralProjRealPotXS(target : Nuclide, proj : Projectile, pot,
     sig_s_GL  = np.dot(Smu,w)
 
     # total xs (Griffths 11.48 - direct series sum)
-    sig_s_SS  = 4*np.pi/k**2 * sig_s
+    sig_s_ss  = 4*np.pi/k**2 * sig_s
 
     # total xs (TPOPC 19.21, Optical theorem)
     # extrapolate Imfmu to mu=1 to get forward scattering amplitude
     slope =  (Imfmu[-1] - Imfmu[-2])/(mu[-1] - mu[-2])
     sig_s_opt = 4*np.pi/k * (Imfmu[-1] + slope * (1 - mu[-1]))
 
-    return Smu, sig_s_GL, sig_s_SS, sig_s_opt
+    return Smu, sig_s_GL, sig_s_ss, sig_s_opt
 
 
 """
@@ -131,15 +127,15 @@ arbitrary projectile incident on a spherically-symmetric complex potential.
               value in MeV.
 """
 def xs(target : Nuclide, proj : Projectile, pot,
-       E_inc : float, mu : np.array, w : np.array,
-       grid_size = 100 , lmax = 30, tol=1E-10, plot=False):
+       E_inc : float, mu : np.array, w : np.array, Smatrix : np.array,
+       grid_size = 100 , lmax = 30, tol=1E-5, plot=False):
 
     # parameters and dimensional analysis
     h2m = reducedh2m_fm2(proj, target)/1E6  # MeV fm^2
     k   = np.sqrt(E_inc/h2m)                # 1/fm - external wavenumber
 
     # set up radial and potential grids for the internal region
-    Rmax = 3*target.R
+    Rmax = 2*target.R
     r  = np.linspace(0,Rmax,grid_size)
     dr = r[-1] - r[-2]
 
@@ -148,25 +144,23 @@ def xs(target : Nuclide, proj : Projectile, pot,
 
     # grids over Legendre moments
     l_grid = np.arange(0,lmax+1,1, dtype="int")
-    S      = np.zeros(lmax+1, dtype='cdouble') # S-matrix element
+    S      = np.zeros(l_grid.size, dtype='cdouble')
+    S2_sum = 0  # running tally of sum_l |S_l|^2
+
+    (lmax_mat , smax_mat) = tuple([x - 1 for x in list(Smatrix.shape)])
 
     # for each angular momentum eigenstate
-    sig_s = 0 # tally up contributions from each eigenstate
     for l in l_grid:
-        # start with 0 matrix elements
+        # start with 0 matrix element for l
         S_l = 0
-        # TODO just take 1 spin for xs, assume polarized beam
-        # let averaging happen externally
+        # QM ang momentum vector sum rules for J = L+S: j on [l-s,l+s]
+        # if l-s < 0, then lower bound is s
         # TODO use sympy.physics.quantum.spin to generalize
         # determine allowed total projectile angular momentum j
         # (eigenvalues of vector addition of l and s)
-        lower = -s
-        if (s>l):
-            lower = s
-        sgrid = np.arange(lower,s+1,1)
-        jgrid = sgrid + l
+        jgrid = np.arange(np.abs(l-s), l+s +1,1)
         num_spins = jgrid.size
-        for j in jgrid:
+        for spin_index, j in enumerate(jgrid):
 
             # initialize potential
             ket = optical.SpinState(j,l,s)
@@ -176,10 +170,21 @@ def xs(target : Nuclide, proj : Projectile, pot,
             u     = np.zeros(V.shape,dtype="cdouble")
             u[1]  = np.complex(1,1)
 
-            # solve Schroedinger's equation in the internal region
-            u = solve(l, E_inc, h2m, V, r,u)
+            # solve the radial component of Schroedinger's equation in the
+            # internal region.
+            # Here, we divide by r to get the fulll radial wavefunction
+            # for this stationary angular moonmentum state u_l(r)/r.
+            u = solve(l, E_inc, h2m, V, r,u)/r
+            if False:
+                plt.plot(r,V, label="Optical Model")
+                plt.plot(r,h2m*l*(l+1)/r**2,
+                        label=r"$\frac{\hbar^2}{2\mu}\frac{l(l+1)}{r^2}$")
+                plt.xlabel(r"$r$ [fm]")
+                plt.ylabel(r"$V(r)$ [Mev]")
+                plt.legend()
+                plt.show()
             if plot:
-                plotPsi(u,r,l,j)
+                plotPsi(u[1:],r[1:],l,j)
 
             # match internal and external wavefunctions
             # use linear interpolation, with matching radius halfway between
@@ -194,49 +199,83 @@ def xs(target : Nuclide, proj : Projectile, pot,
             # they reduce to this form for neutral projectiles
 
             # spherical Bessel function of 1st kind of order l, and derivative
+            # careful with the derivative - we are taking d/dr = d(kr)/dr d/d(kr) = k d/dr
+            # so we get a factor of k when we use the recurrence relation derivative formulas
             jkl  = sc.spherical_jn(l,k*rmatch)
-            djkl = sc.spherical_jn(l,k*rmatch, derivative=True)
+            djkl = k*sc.spherical_jn(l,k*rmatch, derivative=True)
 
             # spherical Hankel function of 1st kind of order l, and derivative
+            # same factor of k appears here
             hkl  = sc.spherical_jn(l,k*rmatch) + 1j * sc.spherical_yn(l,k*rmatch)
-            dhkl = sc.spherical_jn(l,k*rmatch,derivative=True) \
-                 + 1j * sc.spherical_yn(l,k*rmatch, derivative=True)
+            dhkl = k*(sc.spherical_jn(l,k*rmatch,derivative=True) \
+                 + 1j * sc.spherical_yn(l,k*rmatch, derivative=True))
 
             # solve the system:
-            # u_ext(r_match) = u_int(rmatch)
-            # d/dr u_ext(r)|_{r+rmatch} = d/dr u_int(r) |_{r+r_match}
-            # for partial wave amplitude a_{l,s} in u_ext (by eliminating normalization factor A)
-            a_ls = (1j/k) * (jkl * u1 - djkl * u0)/(hkl * u1 - dhkl * u0)
-
-            # calculate the S matrix element and transmission coefficients
-            S_l  += a_ls
+            # A u_ext(r_match) = u_int(rmatch)
+            # A d/dr u_ext(r)|_{r+rmatch} = d/dr u_int(r) |_{r+r_match}
+            # for S matrix element S_{l,s} in u_ext
+            # (by eliminating normalization factor A)
+            S_lj = 1j* (jkl * u1 - djkl * u0)/(hkl * u1 - dhkl * u0) # [fm]
+            S_l += S_lj
+            if (l <= lmax_mat and s <= smax_mat):
+                Smatrix[l][spin_index] = S_lj
 
         # record lth matrix element contribution to total differential cross section
-        # by averaging over incoming spin states (assume un-polarized beam)
-        S[l] = S_l / num_spins
+        S[l]    = S_l / num_spins           # average over incoming spin states
+        S2      = (S[l] * S[l].conj()).real # get |S_l|^2
+        S2_sum += S2*(2*l+1)                # increment tally of sum_l (2l+1)|S_l|^2
+        if (S2 > 1):
+            print("\n(S2 > 1): S2 = {:1.5f}".format(S2))
+            print("l = {}".format(l))
+            print("k = {} [1/fm]".format(k))
+            print("E = {} [MeV]\n".format(E_inc))
 
-        # break loop if relative change in S dips below a tolerance
-        S2 = (S[l] * S[l].conj()).real
-        print("|S_{}|^2: {}".format(l,S2))
-        if ((l > 2)
-            and
-            ((S[l-1] * S[l-1].conj() - S2)/(S[l-1] * S[l-1].conj()) < tol )):
+        # break loop if |S_l|^2 dips below a tolerance
+        print("|S_{}|: {:0.6e}".format(l,np.sqrt(S2)))
+        if ((l > 2) and (S2 < tol )):
             print("max l: {}".format(l))
             break
+
+    # how does the matrix elements for each l state compare?
+    if plot:
+        l_plot = np.trim_zeros(l_grid,trim="b")
+        S_plot = S[0:l_plot.size]
+        S_mag  = np.sqrt((S_plot * S_plot.conj()).real)
+        plt.plot(l_plot, S_plot.real, marker="*", label=r"Re[$S_{l}$]")
+        plt.plot(l_plot, S_plot.imag, marker="*", label=r"Im[$S_{l}$]")
+        plt.plot(l_plot, S_mag      , marker="*", label=r"$\|S_{l}|$" )
+        plt.xlabel(r"l$")
+        plt.ylabel(r"$S_{l}$")
+        plt.legend()
+        plt.tight_layout()
+        plt.show()
 
     # now we have a matrix element S_l for each Legendre moment l
     # we can reconstruct our differential cross section like so:
     # d sigma / d theta ~ | Sum_l^lmax S_l P_l(cos(theta)) |^2
     # define the sum f(theta) =  Sum_l^lmax S_l P_l(cos(theta))
     # let's calculate the real and imaginary parts in turn:
-    Reftheta = np.polynomial.legendre.legval(mu,(2*l_grid + 1)*S.real)
-    Imftheta = np.polynomial.legendre.legval(mu,(2*l_grid + 1)*S.imag)
+    Refmu = np.polynomial.legendre.legval(mu,(2*l_grid+1)*S.real)
+    Imfmu = np.polynomial.legendre.legval(mu,(2*l_grid+1)*S.imag)
 
     # and now take the complex square to get the differential xs
-    # - integrate over azimuth (factor of 2pi)
     # - convert from [fm^2] to [mb] (factor of 10)
-    dSigdMu = (Reftheta**2 + Imftheta**2) * 10 * 2 * np.pi # [mb]
-    return dSigdMu
+    dSigdMu = (Refmu**2 + Imfmu**2)/k * fm2_to_mb  # [mb/sr]
+
+    # calculate total xs 3 ways:
+    # integrate w/ Gauss-Legendre quadrature over mu
+    # multiply by 2pi to integrate over symmetric azimuth
+    sigs_GL = 2*np.pi*np.dot(dSigdMu,w)
+
+    # TPOPC 19.21, Optical theorem
+    # sig_total = 4*pi/k * Im(f(theta=0))
+    sig_forward = np.polynomial.legendre.legval(1.0,(2*l_grid+1)*S.imag)
+    sigs_opt = 4*np.pi/k * sig_forward * fm2_to_mb
+
+    # series sum (Griffiths 11.27)
+    sigs_ss = S2_sum * (4 * np.pi/k) * fm2_to_mb
+
+    return dSigdMu, sigs_ss, sigs_opt, sigs_GL
 
 def plotPsi(u,r,l,j):
     plt.title(r"$|l,j\rangle = |{},{}\rangle$".format(l,Fraction(j)))
@@ -290,7 +329,7 @@ def test_dSigdmu(E):
     #        r"$n + Fe_{56}^{26} \rightarrow n + Fe_{56}^{26}$  "
     #        + ", E={E:1.3e} [MeV]".format(E=E_inc))
 
-    plotDiffXSDeg(dSigdMu,mu,
+    plotDiffXSDeg(dSigdMu,mu,w,
             r"$n + Fe_{56}^{26} \rightarrow n + Fe_{56}^{26}$  "
             + ", E={E:1.3e} [MeV]".format(E=E_inc))
     plt.tight_layout()
@@ -347,21 +386,91 @@ def realPotTests():
     test_SigE()
 
 def cmplPotTests():
-    Fe56   = Nuclide(56,26)
-    n      = Neutron()
-    params = optical.OMPParams(Fe56,n)
-    omp    = optical.OMP(Fe56, n, params)
-    mu, w  = np.polynomial.legendre.leggauss(5000)
+    Fe56    = Nuclide(56,26)
+    n       = Neutron()
+    s,_     = n.Jpi #1/2
+    params  = optical.OMPParams(Fe56,n)
+    omp     = optical.OMP(Fe56, n, params)
+    mu, w   = np.polynomial.legendre.leggauss(500)
+    Smatrix = np.zeros((50,int(2*s+1)))
     #E_inc  = [4.6, 5.0, 5.6, 6.5, 7.6, 8.0, 10.0, 11.0, 12.0]
-    E_inc  = [4.6]
+    #E_inc  = [14.0, 20.0, 21.6, 24.8, 26.0, 55.0, 65.0, 75.0]
+    E_inc  = [0.01,4.6,14.0]
 
     factor = 1
     for E in E_inc:
-        dSigdMu = xs(Fe56,n,omp,E,mu,w,lmax=50, plot=False)
-        plotDiffXSDeg(dSigdMu*factor,mu,r"$E=${0:1.3f} [MeV]".format(E))
-        factor *= 0.1
+        print("\nFor incident neutron energy: {:1.3e}".format(E))
 
-    plt.title(r"$n + Fe_{56}^{26} \rightarrow n + Fe_{56}^{26}$")
+        dSigdOmega, sig_ss, sig_opt, sig_GL = xs(Fe56,n,omp,E,mu,w,Smatrix,lmax=50, plot=False)
+        plotDiffXSDeg(dSigdOmega*factor,mu,w,r"$E=${0:1.3f} [MeV]".format(E))
+        plt.title(r"$n + Fe_{56}^{26} \rightarrow n + Fe_{56}^{26}$")
+        plt.tight_layout()
+        plt.show()
+        #factor *= 0.1
+
+        print("Total xs series sum:     {:1.4e} [mb]".format(sig_ss))
+        print("Total xs optical:        {:1.4e} [mb]".format(sig_opt))
+        print("Total xs G_L inegration: {:1.4e} [mb]\n".format(sig_GL))
+
+    Egrid_sz = 500
+    Smatrix = np.zeros((Egrid_sz, 50,2), dtype="cdouble")
+    E = np.logspace(-3,2,Egrid_sz)
+    sigs = np.zeros((3,E.size))
+    for i, E_inc in enumerate(E):
+        a,sig_ss,sig_opt, sig_GL = xs(Fe56,n,omp,E_inc,mu,w,Smatrix[i,:,:], lmax=500, plot=False)
+        sigs[0,i] = sig_GL
+        sigs[1,i] = sig_opt
+        sigs[2,i] = sig_ss
+
+    plt.loglog(E, sigs[0,:], label="Direct Integration")
+    plt.loglog(E, sigs[1,:], label="Optical Theorem")
+    plt.loglog(E, sigs[2,:], label="Direct Sum")
+    plt.legend()
+    plt.ylabel(r"$\sigma$ [mb]")
+    plt.xlabel(r"$E$ [MeV] - COM Frame")
+    plt.tight_layout()
+    plt.show()
+
+    plotSmatrix(Smatrix,E)
+
+def plotSmatrix(Smatrix,E):
+    for l in range(0,4):
+        S = Smatrix[:,l,0]
+        plt.loglog(E,S.imag    , label=r"Im($S_{}$)".format(l))
+    plt.legend()
+    plt.ylabel(r"$S_l$")
+    plt.xlabel(r"$E$ [MeV] - COM Frame")
+    plt.tight_layout()
+    plt.show()
+
+    for l in range(0,4):
+        S = Smatrix[:,l,0]
+        plt.loglog(E,S.real    , label=r"Re($S_{}$)".format(l))
+    plt.legend()
+    plt.ylabel(r"$S_l$")
+    plt.xlabel(r"$E$ [MeV] - COM Frame")
+    plt.tight_layout()
+    plt.show()
+
+    for l in range(0,5):
+        S = Smatrix[:,l,0]
+        plt.loglog(E,np.sqrt(S*S.conj()), label=r"$|S_{}|$".format(l))
+    plt.legend()
+    plt.ylabel(r"$|S_l|$")
+    plt.xlabel(r"$E$ [MeV] - COM Frame")
+    plt.tight_layout()
+    plt.show()
+
+    for l in range(0,5):
+        Sdown = Smatrix[:,l,0]
+        Tdown = 1 - Sdown*Sdown.conj()
+        #plt.semilogx(E,Tdown, linestyle="dashed",label=r"$T_{{{}}}$".format(str(l) + "," + str(Fraction(l - 1/2))))
+        Sup = Smatrix[:,l,1]
+        Tup = 1 - Sup*Sup.conj()
+        plt.loglog(E,Tup  , label=r"$T_{{{}}}$".format(str(l) + "," + str(Fraction(l + 1/2))))
+    plt.legend()
+    plt.ylabel(r"$T_{l,j}$")
+    plt.xlabel(r"$E$ [MeV] - COM Frame")
     plt.tight_layout()
     plt.show()
 
