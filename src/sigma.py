@@ -205,10 +205,10 @@ def xs(target : Nuclide, proj : Projectile, pot,
             djkl = k*sc.spherical_jn(l,k*rmatch, derivative=True)
 
             # spherical Hankel function of 1st kind of order l, and derivative
-            # same factor of k appears here
+            # same factor of k appears in the derivative here
             hkl  = sc.spherical_jn(l,k*rmatch) + 1j * sc.spherical_yn(l,k*rmatch)
-            dhkl = k*(sc.spherical_jn(l,k*rmatch,derivative=True) \
-                 + 1j * sc.spherical_yn(l,k*rmatch, derivative=True))
+            dhkl = k*(       sc.spherical_jn(l,k*rmatch, derivative=True) \
+                      + 1j * sc.spherical_yn(l,k*rmatch, derivative=True))
 
             # solve the system:
             # A u_ext(r_match) = u_int(rmatch)
