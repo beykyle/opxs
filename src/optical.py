@@ -180,7 +180,7 @@ class OMP:
         self.real_so   = WoodSaxon(p.real_so.R,   p.real_so.a,   self.real_so_depth)
         self.cmpl_so   = WoodSaxon(p.cmpl_so.R,   p.cmpl_so.a,   self.cmpl_so_depth)
         self.coulomb   = CoulombPotential(target, proj, p.coulomb_radius)
-        self.so_factor = (hbar * c / reducedMass_eV(proj,target))**2 # fm^2
+        self.so_factor = (hbar * c/ (reducedMass_eV(proj,target)))**2 # fm^2
 
     def real(self,E,r, ket : SpinState):
         spin_cpl = ket.IdotSigma() * self.so_factor * self.real_so.dVdr(E,r) / r
