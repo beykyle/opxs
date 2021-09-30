@@ -215,15 +215,16 @@ def xs(target : Nuclide, proj : Projectile, pot,
             # A d/dr u_ext(r)|_{r+rmatch} = d/dr u_int(r) |_{r+r_match}
             # for S matrix element S_{l,s} in u_ext
             # (by eliminating normalization factor A)
-            S_lj = 1j* (jkl * u1 - djkl * u0)/(hkl * u1 - dhkl * u0) # [fm]
+            S_lj = 1j* (jkl * u1 - djkl * u0)/(hkl * u1 - dhkl * u0) # [dimensionless]
             S_l += S_lj
-            if (l <= lmax_mat and s <= smax_mat):
+            # in Griffiths Ch. 11: a_l = S_l / k has units of [distance]
+            if (l <= lmax_mat and spin_index <= smax_mat):
                 Smatrix[l][spin_index] = S_lj
 
         # record lth matrix element contribution to total differential cross section
         S[l]    = S_l / num_spins           # average over incoming spin states
         S2      = (S[l] * S[l].conj()).real # get |S_l|^2
-        S2_sum += S2*(2*l+1)                # increment tally of sum_l (2l+1)|S_l|^2
+        S2_sum += S2*(2*l+1)/k**2           # increment tally of sum_l (2l+1)|S_l|^2
         if (S2 > 1):
             print("\n(S2 > 1): S2 = {:1.5f}".format(S2))
             print("l = {}".format(l))
@@ -255,12 +256,12 @@ def xs(target : Nuclide, proj : Projectile, pot,
     # d sigma / d theta ~ | Sum_l^lmax S_l P_l(cos(theta)) |^2
     # define the sum f(theta) =  Sum_l^lmax S_l P_l(cos(theta))
     # let's calculate the real and imaginary parts in turn:
-    Refmu = np.polynomial.legendre.legval(mu,(2*l_grid+1)*S.real)
-    Imfmu = np.polynomial.legendre.legval(mu,(2*l_grid+1)*S.imag)
+    Refmu = np.polynomial.legendre.legval(mu,(2*l_grid+1)*S.real/k)
+    Imfmu = np.polynomial.legendre.legval(mu,(2*l_grid+1)*S.imag/k)
 
     # and now take the complex square to get the differential xs
     # - convert from [fm^2] to [mb] (factor of 10)
-    dSigdMu = (Refmu**2 + Imfmu**2)/k * fm2_to_mb  # [mb/sr]
+    dSigdMu = (Refmu**2 + Imfmu**2) * fm2_to_mb  # [mb/sr]
 
     # calculate total xs 3 ways:
     # integrate w/ Gauss-Legendre quadrature over mu
@@ -269,11 +270,12 @@ def xs(target : Nuclide, proj : Projectile, pot,
 
     # TPOPC 19.21, Optical theorem
     # sig_total = 4*pi/k * Im(f(theta=0))
-    sig_forward = np.polynomial.legendre.legval(1.0,(2*l_grid+1)*S.imag)
+    sig_forward = np.polynomial.legendre.legval(1.0,(2*l_grid+1)*S.imag/k)
+    #sig_forward = np.polynomial.legendre.legval(1.0,(2*l_grid+1)*S.imag/k)
     sigs_opt = 4*np.pi/k * sig_forward * fm2_to_mb
 
     # series sum (Griffiths 11.27)
-    sigs_ss = S2_sum * (4 * np.pi/k) * fm2_to_mb
+    sigs_ss = S2_sum * (4 * np.pi) * fm2_to_mb
 
     return dSigdMu, sigs_ss, sigs_opt, sigs_GL
 
@@ -391,7 +393,7 @@ def cmplPotTests():
     s,_     = n.Jpi #1/2
     params  = optical.OMPParams(Fe56,n)
     omp     = optical.OMP(Fe56, n, params)
-    mu, w   = np.polynomial.legendre.leggauss(500)
+    mu, w   = np.polynomial.legendre.leggauss(5000)
     Smatrix = np.zeros((50,int(2*s+1)))
     #E_inc  = [4.6, 5.0, 5.6, 6.5, 7.6, 8.0, 10.0, 11.0, 12.0]
     #E_inc  = [14.0, 20.0, 21.6, 24.8, 26.0, 55.0, 65.0, 75.0]
@@ -461,10 +463,10 @@ def plotSmatrix(Smatrix,E):
     plt.tight_layout()
     plt.show()
 
-    for l in range(0,5):
+    for l in range(0,1):
         Sdown = Smatrix[:,l,0]
         Tdown = 1 - Sdown*Sdown.conj()
-        #plt.semilogx(E,Tdown, linestyle="dashed",label=r"$T_{{{}}}$".format(str(l) + "," + str(Fraction(l - 1/2))))
+        plt.semilogx(E,Tdown, linestyle="dashed",label=r"$T_{{{}}}$".format(str(l) + "," + str(Fraction(l - 1/2))))
         Sup = Smatrix[:,l,1]
         Tup = 1 - Sup*Sup.conj()
         plt.loglog(E,Tup  , label=r"$T_{{{}}}$".format(str(l) + "," + str(Fraction(l + 1/2))))
