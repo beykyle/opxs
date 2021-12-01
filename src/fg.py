@@ -77,8 +77,10 @@ def HOTest():
     m = 1
     omega = 1
     h2m = hbar/(2*m)
-    l = 1
-    n = 1
+    # if n is even l is on {0,2,...,n-2,n}
+    # if n is odd  l is on {1,3,...,n-2,n}
+    l = 5
+    n = 11
     if (n-l)%2 == 0:
         k = (n-l)/2
     else:
@@ -87,7 +89,7 @@ def HOTest():
 
     # radial grid
     # RMAX can't be too big or numerical instabilties will result
-    RMAX = 2.5*np.sqrt(2*En/(m*omega)) # extend into forbidden region (E < V)
+    RMAX = 1.5*np.sqrt(2*En/(m*omega)) # extend into forbidden region (E < V)
     NR   = 1000
     r  = np.linspace(0,RMAX,NR)
 
@@ -198,9 +200,11 @@ def BesselTest():
     plt.show()
 
 if __name__ == "__main__":
-    print("Running alpha-alpha reaction example from TPOTPC, ch. 13")
-    AlphaTest()
+    #print("Running alpha-alpha reaction example from TPOTPC, ch. 13")
+    #AlphaTest()
+
     #print("Bessel test")
-    #BesselTest()
+    #BesselTest() TODO broken
+
     print("Running 3D QHO test")
     HOTest()
