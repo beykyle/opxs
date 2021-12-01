@@ -176,7 +176,7 @@ def xs(target : Nuclide, proj : Projectile, pot,
             # internal region.
             # Here, we divide by r to get the fulll radial wavefunction
             # for this stationary angular moonmentum state u_l(r)/r.
-            u = solve(l, E_inc, h2m, V, r,u)*r
+            u = solve(l, E_inc, h2m, V, r,u)/r
             if False:
                 plt.plot(r,V, label="Optical Model")
                 plt.plot(r,h2m*l*(l+1)/r**2,
