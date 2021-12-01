@@ -145,6 +145,7 @@ def xs(target : Nuclide, proj : Projectile, pot,
     # grids over Legendre moments
     l_grid = np.arange(0,lmax+1,1, dtype="int")
     S      = np.zeros(l_grid.size, dtype='cdouble')
+    S_l2   = np.zeros(l_grid.size, dtype='double')
     S2_sum = 0  # running tally of sum_l |S_l|^2
 
     (lmax_mat , smax_mat) = tuple([x - 1 for x in list(Smatrix.shape)])
@@ -153,6 +154,7 @@ def xs(target : Nuclide, proj : Projectile, pot,
     for l in l_grid:
         # start with 0 matrix element for l
         S_l = 0
+        Sl2 = 0
         # QM ang momentum vector sum rules for J = L+S: j on [l-s,l+s]
         # if l-s < 0, then lower bound is s
         # TODO use sympy.physics.quantum.spin to generalize
@@ -174,7 +176,7 @@ def xs(target : Nuclide, proj : Projectile, pot,
             # internal region.
             # Here, we divide by r to get the fulll radial wavefunction
             # for this stationary angular moonmentum state u_l(r)/r.
-            u = solve(l, E_inc, h2m, V, r,u)/r
+            u = solve(l, E_inc, h2m, V, r,u)*r
             if False:
                 plt.plot(r,V, label="Optical Model")
                 plt.plot(r,h2m*l*(l+1)/r**2,
@@ -217,13 +219,16 @@ def xs(target : Nuclide, proj : Projectile, pot,
             # (by eliminating normalization factor A)
             S_lj = 1j* (jkl * u1 - djkl * u0)/(hkl * u1 - dhkl * u0) # [dimensionless]
             S_l += S_lj
+            Sl2 += S_lj * S_lj.conj()
             # in Griffiths Ch. 11: a_l = S_l / k has units of [distance]
             if (l <= lmax_mat and spin_index <= smax_mat):
                 Smatrix[l][spin_index] = S_lj
 
         # record lth matrix element contribution to total differential cross section
         S[l]    = S_l / num_spins           # average over incoming spin states
+        S_l2[l] = Sl2 / num_spins           # average over incoming spin states
         S2      = (S[l] * S[l].conj()).real # get |S_l|^2
+        #S2 = S_l2[l]
         S2_sum += S2*(2*l+1)/k**2           # increment tally of sum_l (2l+1)|S_l|^2
         if (S2 > 1):
             print("\n(S2 > 1): S2 = {:1.5f}".format(S2))
@@ -397,7 +402,7 @@ def cmplPotTests():
     Smatrix = np.zeros((50,int(2*s+1)))
     #E_inc  = [4.6, 5.0, 5.6, 6.5, 7.6, 8.0, 10.0, 11.0, 12.0]
     #E_inc  = [14.0, 20.0, 21.6, 24.8, 26.0, 55.0, 65.0, 75.0]
-    E_inc  = [0.01,4.6,14.0]
+    E_inc  = [0.01,4.6,14.0,50.0]
 
     factor = 1
     for E in E_inc:
@@ -439,6 +444,7 @@ def plotSmatrix(Smatrix,E):
     for l in range(0,4):
         S = Smatrix[:,l,0]
         plt.loglog(E,S.imag    , label=r"Im($S_{}$)".format(l))
+    plt.plot([E.min(),E.max()], [1,1], "-.")
     plt.legend()
     plt.ylabel(r"$S_l$")
     plt.xlabel(r"$E$ [MeV] - COM Frame")
@@ -448,6 +454,7 @@ def plotSmatrix(Smatrix,E):
     for l in range(0,4):
         S = Smatrix[:,l,0]
         plt.loglog(E,S.real    , label=r"Re($S_{}$)".format(l))
+    plt.plot([E.min(),E.max()], [1,1], "-.")
     plt.legend()
     plt.ylabel(r"$S_l$")
     plt.xlabel(r"$E$ [MeV] - COM Frame")
@@ -457,6 +464,7 @@ def plotSmatrix(Smatrix,E):
     for l in range(0,5):
         S = Smatrix[:,l,0]
         plt.loglog(E,np.sqrt(S*S.conj()), label=r"$|S_{}|$".format(l))
+    plt.plot([E.min(),E.max()], [1,1], "-.")
     plt.legend()
     plt.ylabel(r"$|S_l|$")
     plt.xlabel(r"$E$ [MeV] - COM Frame")
