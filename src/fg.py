@@ -79,8 +79,8 @@ def HOTest():
     h2m = hbar/(2*m)
     # if n is even l is on {0,2,...,n-2,n}
     # if n is odd  l is on {1,3,...,n-2,n}
-    l = 5
-    n = 11
+    l = 3
+    n = 21
     if (n-l)%2 == 0:
         k = (n-l)/2
     else:
