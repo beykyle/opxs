@@ -3,6 +3,11 @@
 import numpy as np
 from matplotlib import pyplot as plt
 from nuclide import Nuclide, Projectile, Neutron, e, hbar,c, reducedMass_eV
+from parseParams import parseParams
+
+# add data dir
+import sys, os
+sys.path.append(os.path.join(os.path.dirname(sys.path[0]),'data'))
 
 """
 This module provides simple optical potentials
@@ -130,25 +135,29 @@ class PotParams:
         self.a      = a
         self.coeffs = coeffs
 
+# use KD Global Params by default
 class OMPParams:
-    def __init__(self, target : Nuclide, proj : Projectile):
+    def __init__(self, target : Nuclide, proj : Projectile, param_file = None):
         self.target    = target
         self.proj      = proj
         self.compound  = target.compound(proj)
+        self.alpha     = (target.A - 2 * target.Z)/target.A
 
-        #TODO pull data from map (A,Z) -> params
-        # for now, hardcode Fe-56 from (A.j. Koning, J.P. Delaroche, 2003)
-        assert(target.A == 56)
-        assert(target.Z == 26)
-        self.real_vol  = PotParams(1.186*target.A**(1./3.), 0.663,
-                np.array([56.8, 0.0071, 0.000019, 7E-9]))
-        self.cmpl_vol  = PotParams(1.186*target.A**(1./3.), 0.663, np.array([13.0, 80]))
-        self.cmpl_surf = PotParams(1.282*target.A**(1./3.),0.532, np.array([15.3, 0.0211, 10.9]))
-        self.real_so   = PotParams(1.0*target.A**(1./3.), 0.58, np.array([6.1, 0.0040]))
-        self.cmpl_so   = PotParams(1.0*target.A**(1./3.), 0.58, np.array([-3.1, 160]))
-        self.coulomb_radius = target.R ##TODO not specified in KD paper
-        self.Ef        = -9.42
-        #self.Ef = -0.5 * (target.binding() + self.compound.binding())
+        if param_file:
+            # parse params
+            d = parseParams(param_file)
+
+        else:
+            d = parseParams(os.path.join( os.path.dirname(sys.path[0]) , "data/KDGlobal.json"))
+            # use default KD params
+            self.real_vol  = PotParams(1.186*target.A**(1./3.), 0.663,
+                    np.array([56.8, 0.0071, 0.000019, 7E-9]))
+            self.cmpl_vol  = PotParams(1.186*target.A**(1./3.), 0.663, np.array([13.0, 80]))
+            self.cmpl_surf = PotParams(1.282*target.A**(1./3.),0.532, np.array([15.3, 0.0211, 10.9]))
+            self.real_so   = PotParams(1.0*target.A**(1./3.), 0.58, np.array([6.1, 0.0040]))
+            self.cmpl_so   = PotParams(1.0*target.A**(1./3.), 0.58, np.array([-3.1, 160]))
+            self.coulomb_radius = 1.198 + 0.697 * target.A**(-2./3.) + 12.994 * target.A**(-5./3.)
+            self.Ef        = -9.42
 
 class SpinState:
     def __init__(self, j : int, l : int, s : int):
@@ -165,6 +174,7 @@ class OMP:
         self.params   = p
         self.target   = target
         self.proj     = proj
+        A13           = target.A**(1./3.)
 
         # set up depth models
         self.real_vol_depth  = KDVolumeDepth(p.real_vol.coeffs, p.Ef)
@@ -174,12 +184,12 @@ class OMP:
         self.cmpl_so_depth   = KDComplexSpinOrbitDepth(p.cmpl_so.coeffs, p.Ef)
 
         # set up functional forms
-        self.real_vol  = WoodSaxon(p.real_vol.R,  p.real_vol.a,  self.real_vol_depth)
-        self.cmpl_vol  = WoodSaxon(p.cmpl_vol.R,  p.cmpl_vol.a,  self.cmpl_vol_depth)
-        self.cmpl_surf = WoodSaxon(p.cmpl_surf.R, p.cmpl_surf.a, self.cmpl_surf_depth)
-        self.real_so   = WoodSaxon(p.real_so.R,   p.real_so.a,   self.real_so_depth)
-        self.cmpl_so   = WoodSaxon(p.cmpl_so.R,   p.cmpl_so.a,   self.cmpl_so_depth)
-        self.coulomb   = CoulombPotential(target, proj, p.coulomb_radius)
+        self.real_vol  = WoodSaxon(p.real_vol.R*A13,  p.real_vol.a,  self.real_vol_depth)
+        self.cmpl_vol  = WoodSaxon(p.cmpl_vol.R*A13,  p.cmpl_vol.a,  self.cmpl_vol_depth)
+        self.cmpl_surf = WoodSaxon(p.cmpl_surf.R*A13, p.cmpl_surf.a, self.cmpl_surf_depth)
+        self.real_so   = WoodSaxon(p.real_so.R*A13,   p.real_so.a,   self.real_so_depth)
+        self.cmpl_so   = WoodSaxon(p.cmpl_so.R*A13,   p.cmpl_so.a,   self.cmpl_so_depth)
+        self.coulomb   = CoulombPotential(target, proj, p.coulomb_radius*A13)
         self.so_factor = (hbar * c/ (reducedMass_eV(proj,target)))**2 # fm^2
 
     def real(self,E,r, ket : SpinState):
