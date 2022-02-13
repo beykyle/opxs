@@ -20,6 +20,7 @@ This module calculates cross sections for neutral particles incident on spherica
 fm2_to_mb = 10
 
 
+# plotting
 def plotDiffXS(dSigdMu,mu, label):
     plt.semilogy(mu, dSigdMu, label=label)
     plt.xlabel(r"$\cos{\left( \theta \right)}$")
@@ -34,6 +35,28 @@ def plotDiffXSDeg(dSigdMu,mu,w,label):
     plt.xlabel(r"$\theta^\degree$")
     plt.ylabel(r"$\frac{d\sigma}{d\Omega}$ [mb/sr]")
     plt.legend()
+
+def plotPsi(u,r,l,j):
+    plt.title(r"$|l,j\rangle = |{},{}\rangle$".format(l,Fraction(j)))
+    rho = (u.real**2 + u.imag**2)
+    plt.plot(r,u.real/np.sum(u.real),label=r"Re[$\psi$]")
+    plt.plot(r,u.imag/np.sum(u.imag),label=r"Im[$\psi$]")
+    plt.plot(r,rho/np.sum(rho),label=r"$\|\psi\|^2$")
+    plt.xlabel(r"$r$ [fm]")
+    plt.ylabel(r"$\psi(r)$ [un-normalized]")
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+def plotPot(r,realV,imagV):
+    plt.plot(r,realV, label=r"Re($V(r)$)")
+    plt.plot(r,imagV, label="Im($V(r)$)")
+    plt.xlabel(r"$r$ [fm]")
+    plt.ylabel(r"$V(r)$ [MeV]")
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
 
 """
 Calculates a non-relativistic differential scattering cross section [fm^2] for a
@@ -116,7 +139,7 @@ def neutralProjRealPotXS(target : Nuclide, proj : Projectile, pot,
 """
 Calculates a non-relativistic differential scattering cross section [mb] for an
 arbitrary projectile incident on a spherically-symmetric complex potential.
-@param pot    An Optical Model Potenrtial (OMP), with function V(r,E,ket) returning a complex
+@param pot    An Optical Model Potential (OMP), with function V(r,E,ket) returning a complex
               np array for the potiential at incident energy E [MeV], over distance np array r [fm],
               and with SpinState ket
 @param E_inc  incident projectile energy in COM frame [MeV]
@@ -126,6 +149,7 @@ arbitrary projectile incident on a spherically-symmetric complex potential.
               between them. Object should be callable with a distance in fm. Should return a
               value in MeV.
 """
+#TODO currently only support neutrons as projectiles
 def xs(target : Nuclide, proj : Projectile, pot,
        E_inc : float, mu : np.array, w : np.array, Smatrix : np.array,
        grid_size = 100 , lmax = 30, tol=1E-5, plot=False):
@@ -197,8 +221,8 @@ def xs(target : Nuclide, proj : Projectile, pot,
             u1     = (u[-1] - u[-2])/dr   # d/dr u_int(r) |_{r=r_match}
 
             #TODO use Coulomb wavefxns instead of Bessel/Hankel below
-            # use mpmath module
             # they reduce to this form for neutral projectiles
+            #TODO use mpmath module
 
             # spherical Bessel function of 1st kind of order l, and derivative
             # careful with the derivative - we are taking d/dr = d(kr)/dr d/d(kr) = k d/dr
@@ -244,13 +268,13 @@ def xs(target : Nuclide, proj : Projectile, pot,
 
     # how does the matrix elements for each l state compare?
     if plot:
-        l_plot = np.trim_zeros(l_grid,trim="b")
-        S_plot = S[0:l_plot.size]
+        S_plot = np.trim_zeros(S, trim="b")
+        l_plot = l_grid[0:S_plot.size]
         S_mag  = np.sqrt((S_plot * S_plot.conj()).real)
         plt.plot(l_plot, S_plot.real, marker="*", label=r"Re[$S_{l}$]")
         plt.plot(l_plot, S_plot.imag, marker="*", label=r"Im[$S_{l}$]")
         plt.plot(l_plot, S_mag      , marker="*", label=r"$\|S_{l}|$" )
-        plt.xlabel(r"l$")
+        plt.xlabel(r"$l$")
         plt.ylabel(r"$S_{l}$")
         plt.legend()
         plt.tight_layout()
@@ -283,27 +307,6 @@ def xs(target : Nuclide, proj : Projectile, pot,
     sigs_ss = S2_sum * (4 * np.pi) * fm2_to_mb
 
     return dSigdMu, sigs_ss, sigs_opt, sigs_GL
-
-def plotPsi(u,r,l,j):
-    plt.title(r"$|l,j\rangle = |{},{}\rangle$".format(l,Fraction(j)))
-    rho = (u.real**2 + u.imag**2)
-    plt.plot(r,u.real/np.sum(u.real),label=r"Re[$\psi$]")
-    plt.plot(r,u.imag/np.sum(u.imag),label=r"Im[$\psi$]")
-    plt.plot(r,rho/np.sum(rho),label=r"$\|\psi\|^2$")
-    plt.xlabel(r"$r$ [fm]")
-    plt.ylabel(r"$\psi(r)$ [un-normalized]")
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
-
-def plotPot(r,realV,imagV):
-    plt.plot(r,realV, label=r"Re($V(r)$)")
-    plt.plot(r,imagV, label="Im($V(r)$)")
-    plt.xlabel(r"$r$ [fm]")
-    plt.ylabel(r"$V(r)$ [MeV]")
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
 
 def test_dSigdmu(E):
 
@@ -408,7 +411,7 @@ def cmplPotTests():
     for E in E_inc:
         print("\nFor incident neutron energy: {:1.3e}".format(E))
 
-        dSigdOmega, sig_ss, sig_opt, sig_GL = xs(Fe56,n,omp,E,mu,w,Smatrix,lmax=50, plot=False)
+        dSigdOmega, sig_ss, sig_opt, sig_GL = xs(Fe56,n,omp,E,mu,w,Smatrix,lmax=50, plot=True)
         plotDiffXSDeg(dSigdOmega*factor,mu,w,r"$E=${0:1.3f} [MeV]".format(E))
         plt.title(r"$n + Fe_{56}^{26} \rightarrow n + Fe_{56}^{26}$")
         plt.tight_layout()
