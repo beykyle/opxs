@@ -1,6 +1,7 @@
 #! /usr/bin/python3
 
 import numpy as np
+import matplotlib
 from matplotlib import pyplot as plt
 from nuclide import Nuclide, Projectile, Neutron, e, hbar,c, reducedMass_eV
 from parseParams import parseParams
@@ -230,18 +231,25 @@ class OMP:
         plt.show()
 
     def plotDepths(self,E : np.array):
-        plt.plot(E, self.real_vol_depth.V0(E),  label=r"$V_v$")
-        plt.plot(E, self.real_so_depth.V0(E),   label=r"$V_{so}$")
-        plt.plot(E, self.cmpl_vol_depth.V0(E),  label=r"$W_v$")
-        plt.plot(E, self.cmpl_so_depth.V0(E),   label=r"$W_{so}$")
-        plt.plot(E, self.cmpl_surf_depth.V0(E), label=r"$W_{D}$")
-        plt.xlabel(r"$E_{CM}$ [MeV]")
-        plt.ylabel(r"Potential Depth $V_0$ [MeV]")
+        plt.plot(E, self.real_vol_depth.V0(E),  label=r"real central")
+        plt.plot(E, self.real_so_depth.V0(E),   label=r"real spin-orbit")
+        plt.plot(E, self.cmpl_vol_depth.V0(E),  label=r"imag central")
+        plt.plot(E, self.cmpl_so_depth.V0(E),   label=r"imag spin orbit")
+        plt.plot(E, self.cmpl_surf_depth.V0(E), label=r"imag surface")
+        plt.xlabel(r"$E_{CM}$ [MeV]", fontsize="16")
+        plt.ylabel(r"Potential Depth $V_0$ [MeV]", fontsize="16")
         plt.tight_layout()
         plt.legend()
         plt.show()
 
 if __name__ == "__main__":
+
+    font = {'family' : 'normal',
+        'weight' : 'bold',
+        'size'   : 14}
+
+    matplotlib.rc('font', **font)
+
     print("Plotting Fe-56 potentials:")
     Fe56   = Nuclide(56,26)
     n      = Neutron()
